@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple forward-pointing double chevron: used for the launcher and the notification. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M4,5 L7,5 L14,12 L7,19 L4,19 L11,12 Z M11,5 L14,5 L21,12 L14,19 L11,19 L18,12 Z" />
+</vector>

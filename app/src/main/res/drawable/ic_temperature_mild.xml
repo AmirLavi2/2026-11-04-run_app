@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Not hot or cold: the ic_temperature shape, fading from red at the top to blue at the bottom. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M9,5a2,2 0 0,1 4,0V13.5a4.5,4.5 0 1,1 -4,0Z"
+        android:strokeWidth="1.6">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:endColor="#4FC3F7"
+                android:endX="12"
+                android:endY="22"
+                android:startColor="#FF5252"
+                android:startX="12"
+                android:startY="3"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M10.2,7h1.6V15.1a2.6,2.6 0 1,1 -1.6,0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endColor="#4FC3F7"
+                android:endX="12"
+                android:endY="22"
+                android:startColor="#FF5252"
+                android:startX="12"
+                android:startY="3"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M15.5,5H19M15.5,9H18M15.5,13H19"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:endColor="#4FC3F7"
+                android:endX="12"
+                android:endY="22"
+                android:startColor="#FF5252"
+                android:startX="12"
+                android:startY="3"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+</vector>

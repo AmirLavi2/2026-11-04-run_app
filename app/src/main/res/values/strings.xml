@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Run Tracker</string>
+    <string name="start">Start</string>
+    <string name="hold_to_stop">Hold to stop</string>
+    <string name="export_csv">Export all runs (CSV)</string>
+    <string name="preview_faster">▲ Faster tone</string>
+    <string name="preview_slower">▼ Slower tone</string>
+    <string name="km">km</string>
+    <string name="avg_pace">Avg pace %1$s /km</string>
+    <string name="no_temperature">–</string>
+    <string name="gnss_status">GPS status</string>
+    <string name="temperature_status">Temperature</string>
+    <string name="gnss_accuracy">±%1$d m</string>
+    <string name="gnss_no_signal">No signal</string>
+    <string name="gps_waiting">Waiting for GPS…</string>
+    <string name="gps_ok">GPS OK</string>
+    <string name="gps_lost">GPS lost – timer still running</string>
+    <string name="channel_name">Active run</string>
+    <string name="need_location">Run Tracker needs precise location to measure distance.</string>
+    <string name="turn_on_gps">Turn on location, then press Start again.</string>
+    <string name="summary_title">Run #%1$d</string>
+    <string name="summary_time">Time %1$s</string>
+    <string name="summary_distance">Distance %1$s km</string>
+    <string name="summary_temperature">Temperature %1$s</string>
+    <string name="summary_estimated">Estimated during GPS gaps %1$s km</string>
+    <string name="export_gpx">Export GPX</string>
+    <string name="close">Close</string>
+    <string name="drive_connect">Connect Google Drive</string>
+    <string name="drive_all_uploaded">Google Drive: all runs uploaded</string>
+    <string name="drive_waiting">Google Drive: %1$d waiting to upload</string>
+    <string name="drive_failed">Couldn\'t connect to Google Drive: %1$s</string>
+    <string name="delete_run_title">Delete run #%1$d?</string>
+    <string name="delete_run_message">Are you sure? This can\'t be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="exported">Exported</string>
+    <string name="export_failed">Export failed</string>
+</resources>
