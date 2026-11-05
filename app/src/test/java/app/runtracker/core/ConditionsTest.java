@@ -25,9 +25,10 @@ public class ConditionsTest {
     @Test
     public void colourBandMatchesTheRoundedNumberShown() {
         assertEquals(TempBand.COLD, Conditions.tempBand(-5));
-        assertEquals(TempBand.COLD, Conditions.tempBand(11.4));
-        assertEquals("12°C", Conditions.temperature(11.5));
-        assertEquals(TempBand.MILD, Conditions.tempBand(11.5));
+        assertEquals(TempBand.COLD, Conditions.tempBand(18));
+        assertEquals(TempBand.COLD, Conditions.tempBand(19.4));
+        assertEquals("20°C", Conditions.temperature(19.5));
+        assertEquals(TempBand.MILD, Conditions.tempBand(19.5));
         assertEquals(TempBand.MILD, Conditions.tempBand(24.4));
         assertEquals("25°C", Conditions.temperature(24.5));
         assertEquals(TempBand.HOT, Conditions.tempBand(24.5));

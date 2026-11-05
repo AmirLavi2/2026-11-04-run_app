@@ -42,6 +42,10 @@ public final class Export {
         return pace(r.durationMs / 1000.0 / (r.distanceM / 1000.0));
     }
 
+    public static String speedKmh(double secondsPerKm) {
+        return String.format(Locale.US, "%.1f", 3600 / secondsPerKm);
+    }
+
     public static String pace(double secondsPerKm) {
         long s = Math.round(secondsPerKm);
         return String.format(Locale.US, "%d:%02d", s / 60, s % 60);

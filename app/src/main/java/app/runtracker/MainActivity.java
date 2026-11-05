@@ -4,6 +4,8 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.SharedPreferences;
@@ -20,6 +22,7 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
 import android.util.Log;
@@ -71,6 +74,8 @@ public final class MainActivity extends Activity {
     private static final int COLOR_MILD = 0xFFB388FF;
     private static final int COLOR_HOT = 0xFFFF5252;
     private static final int COLOR_READY = 0xFF6FD08C;
+    private static final int COLOR_DISTANCE = 0xFFFF7A1A;
+    private static final int COLOR_DISTANCE_ON_BLUE = 0xFFFFFFFF;
     private static final int COLOR_WEAK = 0xFFFFB020;
     private static final int COLOR_NONE = 0xFF6B737B;
     private static final String TAG = "MainActivity";
@@ -98,8 +103,9 @@ public final class MainActivity extends Activity {
     private TextView temperatureInfo;
     private TextView timeOfDay;
     private TextView gps;
-    private View tonePreview;
-    private View exportCsv;
+    private View root;
+    private View idlePanel;
+    private Conditions.TimeOfDay shownSky;
     private Button driveStatus;
     private Button action;
     private ListView history;
@@ -145,6 +151,8 @@ public final class MainActivity extends Activity {
         time = findViewById(R.id.time);
         distance = findViewById(R.id.distance);
         pace = findViewById(R.id.pace);
+        TextView version = findViewById(R.id.version);
+        version.setText(getString(R.string.version, BuildConfig.VERSION_NAME));
         gnssIcon = findViewById(R.id.gnss_icon);
         gnssInfo = findViewById(R.id.gnss_info);
         temperatureIcon = findViewById(R.id.temperature_icon);
@@ -155,12 +163,14 @@ public final class MainActivity extends Activity {
         gps = findViewById(R.id.gps);
         action = findViewById(R.id.action);
         history = findViewById(R.id.history);
-        tonePreview = findViewById(R.id.tone_preview);
-        exportCsv = findViewById(R.id.export_csv);
+        root = findViewById(R.id.root);
+        idlePanel = findViewById(R.id.idle_panel);
         driveStatus = findViewById(R.id.drive_status);
         driveStatus.setOnClickListener(v -> {
             if (!DriveSync.isConnected(this)) {
                 connectDrive();
+            } else if (db.uploadsWaiting() > 0) {
+                retryUpload();
             }
         });
         TonePlayer tones = new TonePlayer(this);
@@ -193,6 +203,25 @@ public final class MainActivity extends Activity {
 
         requestPermissionsIfNeeded();
         askBatteryExemptionOnce();
+        showCrashReportIfAny();
+    }
+
+    private void showCrashReportIfAny() {
+        String report = RunTrackerApp.readCrashReport(this);
+        if (report == null) {
+            return;
+        }
+        // Kept until dismissed, so a crash that repeats while this is showing doesn't lose the report.
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.crash_title)
+                .setMessage(report)
+                .setPositiveButton(R.string.crash_copy, (dialog, which) -> {
+                    getSystemService(ClipboardManager.class)
+                            .setPrimaryClip(ClipData.newPlainText(getString(R.string.crash_title), report));
+                    RunTrackerApp.clearCrashReport(this);
+                })
+                .setNegativeButton(R.string.close, (dialog, which) -> RunTrackerApp.clearCrashReport(this))
+                .show();
     }
 
     @Override
@@ -243,11 +272,7 @@ public final class MainActivity extends Activity {
             setShowWhenLocked(running);
         }
         wasRunning = running;
-        int whenIdle = running ? View.GONE : View.VISIBLE;
-        tonePreview.setVisibility(whenIdle);
-        exportCsv.setVisibility(whenIdle);
-        driveStatus.setVisibility(whenIdle);
-        history.setVisibility(whenIdle);
+        idlePanel.setVisibility(running ? View.GONE : View.VISIBLE);
 
         if (running) {
             time.setText(Export.duration(SystemClock.elapsedRealtime() - s.startElapsedMs));
@@ -255,7 +280,12 @@ public final class MainActivity extends Activity {
             showPace(s.gpsOk() ? s.averageSecondsPerKm : Double.NaN);
             setIdleGps(false);
             showStatus(s.latestAccuracyM, s.latestFixElapsedMs, s.temperatureC, s.startWallMs);
-            gps.setText(s.gpsOk() ? R.string.gps_ok : s.hadFix ? R.string.gps_lost : R.string.gps_waiting);
+            // The icon already shows when GPS is fine; words are only for when something needs attention.
+            if (s.gpsOk()) {
+                gps.setText("");
+            } else {
+                gps.setText(s.hadFix ? R.string.gps_lost : R.string.gps_waiting);
+            }
             action.setText(R.string.hold_to_stop);
         } else {
             showPace(lastRunAverage);
@@ -280,8 +310,28 @@ public final class MainActivity extends Activity {
             return;
         }
         int waiting = db.uploadsWaiting();
-        driveStatus.setText(waiting == 0 ? getString(R.string.drive_all_uploaded)
-                : getString(R.string.drive_waiting, waiting));
+        if (waiting == 0) {
+            driveStatus.setText(R.string.drive_all_uploaded);
+        } else {
+            boolean failed = DriveSync.lastError(this) != null;
+            driveStatus.setText(getString(failed ? R.string.drive_failed_waiting : R.string.drive_waiting, waiting));
+        }
+    }
+
+    private void retryUpload() {
+        String error = DriveSync.lastError(this);
+        DriveSync.retryNow(this);
+        if (error == null) {
+            Toast.makeText(this, R.string.drive_retrying, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.drive_error_title)
+                .setMessage(error)
+                .setPositiveButton(R.string.crash_copy, (dialog, which) -> getSystemService(ClipboardManager.class)
+                        .setPrimaryClip(ClipData.newPlainText(getString(R.string.drive_error_title), error)))
+                .setNegativeButton(R.string.close, null)
+                .show();
     }
 
     private void connectDrive() {
@@ -308,7 +358,10 @@ public final class MainActivity extends Activity {
 
     private void showDriveFailure(Exception e) {
         Log.w(TAG, "Could not connect to Google Drive", e);
-        Toast.makeText(this, getString(R.string.drive_failed, e.getMessage()), Toast.LENGTH_LONG).show();
+        new AlertDialog.Builder(this)
+                .setMessage(getString(R.string.drive_failed, e.getMessage()))
+                .setPositiveButton(R.string.close, null)
+                .show();
     }
 
     private static void toggle(View view) {
@@ -334,7 +387,19 @@ public final class MainActivity extends Activity {
         temperatureInfo.setText(celsius == null
                 ? getString(R.string.no_temperature) : Conditions.temperature(celsius));
 
-        timeOfDay.setText(icon(Conditions.timeOfDay(timeOfDayWallMs)));
+        Conditions.TimeOfDay sky = Conditions.timeOfDay(timeOfDayWallMs);
+        timeOfDay.setText(icon(sky));
+        showSky(sky);
+    }
+
+    private void showSky(Conditions.TimeOfDay sky) {
+        if (sky == shownSky) {
+            return;
+        }
+        shownSky = sky;
+        root.setBackground(new SkyDrawable(sky, getResources().getDisplayMetrics().density));
+        boolean blueSky = sky == Conditions.TimeOfDay.MORNING || sky == Conditions.TimeOfDay.NOON;
+        distance.setTextColor(blueSky ? COLOR_DISTANCE_ON_BLUE : COLOR_DISTANCE);
     }
 
     /** Runs only while this screen is showing with no active run, so it costs little battery. */
@@ -521,20 +586,43 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
-    private String summaryText(RunRecord run) {
+    private CharSequence summaryText(RunRecord run) {
         double average = averagePace(run);
-        String pace = Double.isNaN(average) ? getString(R.string.no_temperature) : Export.pace(average);
-        StringBuilder text = new StringBuilder()
+        String none = getString(R.string.no_temperature);
+        Conditions.TimeOfDay startedAt = Conditions.timeOfDay(run.startWallMs);
+        SpannableStringBuilder text = new SpannableStringBuilder()
                 .append(new SimpleDateFormat(DATE_PATTERN, Locale.US).format(new Date(run.startWallMs)))
+                .append('\n').append(icon(startedAt)).append(' ').append(getString(timeOfDayName(startedAt)))
                 .append("\n\n").append(getString(R.string.summary_time, Export.duration(run.durationMs)))
                 .append('\n').append(getString(R.string.summary_distance, Export.km(run.distanceM)))
-                .append('\n').append(getString(R.string.avg_pace, pace))
-                .append('\n').append(getString(R.string.summary_temperature, run.temperatureC == null
-                        ? getString(R.string.no_temperature) : Conditions.temperature(run.temperatureC)));
+                .append('\n').append(getString(R.string.avg_pace, Double.isNaN(average) ? none : Export.pace(average)))
+                .append('\n').append(getString(R.string.summary_speed, Double.isNaN(average) ? none : Export.speedKmh(average)))
+                .append('\n').append(getString(R.string.summary_temperature)).append(' ');
+        if (run.temperatureC == null) {
+            text.append(none);
+        } else {
+            int start = text.length();
+            text.append(Conditions.temperature(run.temperatureC));
+            text.setSpan(new ForegroundColorSpan(color(Conditions.tempBand(run.temperatureC))),
+                    start, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
         if (run.estimatedM > 0) {
             text.append('\n').append(getString(R.string.summary_estimated, Export.km(run.estimatedM)));
         }
-        return text.toString();
+        return text;
+    }
+
+    private static int timeOfDayName(Conditions.TimeOfDay timeOfDay) {
+        switch (timeOfDay) {
+            case MORNING:
+                return R.string.morning;
+            case NOON:
+                return R.string.noon;
+            case EVENING:
+                return R.string.evening;
+            default:
+                return R.string.night;
+        }
     }
 
     private void showSummary(RunRecord run) {
@@ -563,13 +651,17 @@ public final class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_DRIVE) {
-            if (resultCode == RESULT_OK) {
-                try {
-                    Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(data);
-                    onDriveConnected();
-                } catch (ApiException e) {
-                    showDriveFailure(e);
-                }
+            // The result carries Google's reason even when the window closed without success.
+            if (data == null) {
+                showDriveFailure(new IllegalStateException("No details returned (result " + resultCode + ")"));
+                return;
+            }
+            try {
+                Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(data);
+                onDriveConnected();
+                Toast.makeText(this, R.string.drive_connected, Toast.LENGTH_SHORT).show();
+            } catch (ApiException e) {
+                showDriveFailure(e);
             }
             return;
         }

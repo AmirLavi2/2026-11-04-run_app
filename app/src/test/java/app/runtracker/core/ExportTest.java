@@ -27,6 +27,12 @@ public class ExportTest {
     }
 
     @Test
+    public void speedComesFromPace() {
+        assertEquals("12.0", Export.speedKmh(300));
+        assertEquals("10.4", Export.speedKmh(345));
+    }
+
+    @Test
     public void csvHasTotalsAndPace() throws IOException {
         StringWriter w = new StringWriter();
         Export.csv(Collections.singletonList(RUN), w);

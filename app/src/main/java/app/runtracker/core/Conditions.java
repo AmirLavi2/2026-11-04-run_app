@@ -32,10 +32,10 @@ public final class Conditions {
         return timeOfDayForHour(calendar.get(Calendar.HOUR_OF_DAY));
     }
 
-    /** Cold below 12 degrees, hot from 25. Uses the rounded value, so colour matches the number shown. */
+    /** Cold below 20 degrees, hot from 25. Uses the rounded value, so colour matches the number shown. */
     public static TempBand tempBand(double celsius) {
         long rounded = Math.round(celsius);
-        if (rounded < 12) {
+        if (rounded < 20) {
             return TempBand.COLD;
         }
         return rounded < 25 ? TempBand.MILD : TempBand.HOT;

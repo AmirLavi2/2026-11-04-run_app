@@ -39,6 +39,7 @@ public final class UploadJobService extends JobService {
                 })
                 .addOnFailureListener(e -> {
                     Log.w(TAG, "Could not get Drive access", e);
+                    DriveSync.setLastError(this, e.toString());
                     jobFinished(params, true);
                 });
         return true;
@@ -54,6 +55,7 @@ public final class UploadJobService extends JobService {
         try (RunDatabase db = new RunDatabase(this)) {
             List<RunRecord> pending = db.runsToUpload();
             if (pending.isEmpty()) {
+                DriveSync.setLastError(this, null);
                 return true;
             }
             DriveClient drive = new DriveClient(token);
@@ -70,9 +72,11 @@ public final class UploadJobService extends JobService {
             Export.csv(db.finishedRuns(), csv);
             drive.createOrReplace(folderId, "runs.csv", "text/csv",
                     csv.toString().getBytes(StandardCharsets.UTF_8));
+            DriveSync.setLastError(this, null);
             return true;
         } catch (IOException | JSONException | RuntimeException e) {
             Log.w(TAG, "Upload failed, will retry", e);
+            DriveSync.setLastError(this, e.toString());
             return false;
         }
     }
