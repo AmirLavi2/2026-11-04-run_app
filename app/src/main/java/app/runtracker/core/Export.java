@@ -24,22 +24,33 @@ public final class Export {
 
     public static void csv(List<RunRecord> runs, Writer w) throws IOException {
         SimpleDateFormat local = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
-        w.write("start,duration,distance_km,estimated_km,avg_pace_min_per_km,temperature_c\n");
+        w.write("start,duration,distance_km,estimated_km,avg_pace_min_per_km,temperature_c,mode,avg_speed_kmh\n");
         for (RunRecord r : runs) {
             w.write(local.format(new Date(r.startWallMs)) + ","
                     + duration(r.durationMs) + ","
                     + String.format(Locale.US, "%.3f,%.3f,", r.distanceM / 1000, r.estimatedM / 1000)
                     + pace(r) + ","
-                    + (r.temperatureC == null ? "" : String.format(Locale.US, "%.1f", r.temperatureC))
+                    + (r.temperatureC == null ? "" : String.format(Locale.US, "%.1f", r.temperatureC)) + ","
+                    + r.mode.label + ","
+                    + String.format(Locale.US, "%.1f", averageKmh(r.distanceM, r.durationMs))
                     + "\n");
         }
     }
 
     private static String pace(RunRecord r) {
-        if (r.distanceM <= 0) {
+        if (r.distanceM <= 0 || r.mode.isVehicle()) {
             return "";
         }
         return pace(r.durationMs / 1000.0 / (r.distanceM / 1000.0));
+    }
+
+    /** Total distance over total time, so stops count. Zero until time has passed. */
+    public static double averageKmh(double distanceM, long durationMs) {
+        return durationMs <= 0 ? 0 : distanceM / 1000.0 / (durationMs / 3_600_000.0);
+    }
+
+    public static String wholeKmh(double kmh) {
+        return String.format(Locale.US, "%d", Math.round(kmh));
     }
 
     public static String speedKmh(double secondsPerKm) {
@@ -56,7 +67,7 @@ public final class Export {
         utc.setTimeZone(TimeZone.getTimeZone("UTC"));
         w.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<gpx version=\"1.1\" creator=\"Run Tracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n"
-                + "<trk><type>running</type>\n");
+                + "<trk><type>" + run.mode.gpxType + "</type>\n");
         int segment = Integer.MIN_VALUE;
         for (TrackPoint p : points) {
             if (p.segment != segment) {

@@ -12,7 +12,32 @@ import java.util.Locale;
 import org.junit.Test;
 
 public class ExportTest {
-    private static final RunRecord RUN = new RunRecord(1, 1_700_000_000_000L, 0, 0, 3_000_000, 10_000, 250, 18.44);
+    private static final RunRecord RUN =
+            new RunRecord(1, 1_700_000_000_000L, 0, 0, 3_000_000, 10_000, 250, 18.44, TravelMode.RUN);
+    private static final RunRecord CAR =
+            new RunRecord(2, 1_700_000_000_000L, 0, 0, 3_600_000, 56_000, 0, null, TravelMode.CAR);
+
+    @Test
+    public void averageSpeedIncludesStopsBecauseItUsesTotalTime() {
+        assertEquals(56, Export.averageKmh(56_000, 3_600_000), 0.001);
+        assertEquals(28, Export.averageKmh(56_000, 7_200_000), 0.001);
+        assertEquals(0, Export.averageKmh(100, 0), 0.001);
+        assertEquals("56", Export.wholeKmh(55.6));
+    }
+
+    @Test
+    public void csvMarksVehiclesAndLeavesTheirPaceEmpty() throws IOException {
+        StringWriter w = new StringWriter();
+        Export.csv(Collections.singletonList(CAR), w);
+        assertTrue(w.toString(), w.toString().endsWith(",1:00:00,56.000,0.000,,,car,56.0\n"));
+    }
+
+    @Test
+    public void gpxTypeFollowsTheMode() throws IOException {
+        StringWriter w = new StringWriter();
+        Export.gpx(CAR, Collections.emptyList(), w);
+        assertTrue(w.toString(), w.toString().contains("<type>driving</type>"));
+    }
 
     @Test
     public void durationAndKm() {
@@ -37,15 +62,15 @@ public class ExportTest {
         StringWriter w = new StringWriter();
         Export.csv(Collections.singletonList(RUN), w);
         String[] lines = w.toString().split("\n");
-        assertEquals("start,duration,distance_km,estimated_km,avg_pace_min_per_km,temperature_c", lines[0]);
-        assertTrue(lines[1], lines[1].endsWith(",0:50:00,10.000,0.250,5:00,18.4"));
+        assertEquals("start,duration,distance_km,estimated_km,avg_pace_min_per_km,temperature_c,mode,avg_speed_kmh", lines[0]);
+        assertTrue(lines[1], lines[1].endsWith(",0:50:00,10.000,0.250,5:00,18.4,run,12.0"));
     }
 
     @Test
     public void csvLeavesMissingTemperatureEmpty() throws IOException {
         StringWriter w = new StringWriter();
-        Export.csv(Collections.singletonList(new RunRecord(1, 0, 0, 0, 60_000, 1000, 0, null)), w);
-        assertTrue(w.toString(), w.toString().endsWith(",1:00,\n"));
+        Export.csv(Collections.singletonList(new RunRecord(1, 0, 0, 0, 60_000, 1000, 0, null, TravelMode.RUN)), w);
+        assertTrue(w.toString(), w.toString().endsWith(",1:00,,run,60.0\n"));
     }
 
     @Test

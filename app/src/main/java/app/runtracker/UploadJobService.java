@@ -60,11 +60,12 @@ public final class UploadJobService extends JobService {
             }
             DriveClient drive = new DriveClient(token);
             String folderId = drive.ensureFolder(FOLDER);
-            SimpleDateFormat fileName = new SimpleDateFormat("'run-'yyyy-MM-dd-HHmmss'.gpx'", Locale.US);
+            SimpleDateFormat fileTime = new SimpleDateFormat("yyyy-MM-dd-HHmmss", Locale.US);
             for (RunRecord run : pending) {
                 StringWriter gpx = new StringWriter();
                 Export.gpx(run, db.points(run.id), gpx);
-                drive.createOrReplace(folderId, fileName.format(new Date(run.startWallMs)),
+                String name = run.mode.label + "-" + fileTime.format(new Date(run.startWallMs)) + ".gpx";
+                drive.createOrReplace(folderId, name,
                         "application/gpx+xml", gpx.toString().getBytes(StandardCharsets.UTF_8));
                 db.markUploaded(run.id);
             }

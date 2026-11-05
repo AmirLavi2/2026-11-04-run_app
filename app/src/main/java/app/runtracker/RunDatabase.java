@@ -12,14 +12,15 @@ import java.util.List;
 import app.runtracker.core.Fix;
 import app.runtracker.core.RunRecord;
 import app.runtracker.core.TrackPoint;
+import app.runtracker.core.TravelMode;
 
 /** Runs and their points. Points are written as they arrive, so a crash loses nothing. */
 final class RunDatabase extends SQLiteOpenHelper {
     private static final String RUN_COLUMNS =
-            "id, start_wall, start_elapsed, boot_count, duration_ms, distance_m, estimated_m, temperature_c";
+            "id, start_wall, start_elapsed, boot_count, duration_ms, distance_m, estimated_m, temperature_c, mode";
 
     RunDatabase(Context context) {
-        super(context, "runs.db", null, 3);
+        super(context, "runs.db", null, 4);
     }
 
     @Override
@@ -28,7 +29,8 @@ final class RunDatabase extends SQLiteOpenHelper {
                 + " start_elapsed INTEGER NOT NULL, boot_count INTEGER NOT NULL,"
                 + " duration_ms INTEGER NOT NULL DEFAULT 0, distance_m REAL NOT NULL DEFAULT 0,"
                 + " estimated_m REAL NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0,"
-                + " temperature_c REAL, uploaded INTEGER NOT NULL DEFAULT 0)");
+                + " temperature_c REAL, uploaded INTEGER NOT NULL DEFAULT 0,"
+                + " mode TEXT NOT NULL DEFAULT 'RUN')");
         db.execSQL("CREATE TABLE points (run_id INTEGER NOT NULL, t_ms INTEGER NOT NULL, lat REAL NOT NULL,"
                 + " lon REAL NOT NULL, accuracy REAL NOT NULL, cum_m REAL NOT NULL,"
                 + " segment INTEGER NOT NULL, tainted INTEGER NOT NULL)");
@@ -43,10 +45,14 @@ final class RunDatabase extends SQLiteOpenHelper {
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE runs ADD COLUMN uploaded INTEGER NOT NULL DEFAULT 0");
         }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'RUN'");
+        }
     }
 
-    long createRun(long startWallMs, long startElapsedMs, int bootCount) {
+    long createRun(long startWallMs, long startElapsedMs, int bootCount, TravelMode mode) {
         ContentValues v = new ContentValues();
+        v.put("mode", mode.name());
         v.put("start_wall", startWallMs);
         v.put("start_elapsed", startElapsedMs);
         v.put("boot_count", bootCount);
@@ -162,6 +168,7 @@ final class RunDatabase extends SQLiteOpenHelper {
 
     private static RunRecord readRun(Cursor c) {
         return new RunRecord(c.getLong(0), c.getLong(1), c.getLong(2), c.getInt(3),
-                c.getLong(4), c.getDouble(5), c.getDouble(6), c.isNull(7) ? null : c.getDouble(7));
+                c.getLong(4), c.getDouble(5), c.getDouble(6), c.isNull(7) ? null : c.getDouble(7),
+                TravelMode.fromName(c.getString(8)));
     }
 }

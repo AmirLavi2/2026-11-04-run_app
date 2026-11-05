@@ -20,7 +20,14 @@
     <string name="channel_name">Active run</string>
     <string name="need_location">Run Tracker needs precise location to measure distance.</string>
     <string name="turn_on_gps">Turn on location, then press Start again.</string>
-    <string name="summary_title">Run #%1$d</string>
+    <string name="summary_title">%1$s #%2$d</string>
+    <string name="mode_run">Run</string>
+    <string name="mode_car">Car</string>
+    <string name="mode_motorcycle">Motorcycle</string>
+    <string name="km_per_hour">km/h</string>
+    <string name="avg_speed_short">Avg %1$s km/h</string>
+    <string name="vehicle_status">%1$s km  ·  avg %2$s km/h</string>
+    <string name="row_speed">%1$s km/h</string>
     <string name="summary_time">Time %1$s</string>
     <string name="summary_distance">Distance %1$s km</string>
     <string name="summary_speed">Avg speed %1$s km/h</string>
@@ -42,7 +49,7 @@
     <string name="drive_retrying">Trying to upload now</string>
     <string name="drive_error_title">Upload problem (trying again)</string>
     <string name="drive_failed">Couldn\'t connect to Google Drive: %1$s</string>
-    <string name="delete_run_title">Delete run #%1$d?</string>
+    <string name="delete_run_title">Delete #%1$d?</string>
     <string name="delete_run_message">Are you sure? This can\'t be undone.</string>
     <string name="delete">Delete</string>
     <string name="cancel">Cancel</string>

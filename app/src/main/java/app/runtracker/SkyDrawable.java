@@ -20,7 +20,7 @@ import app.runtracker.core.Conditions.TimeOfDay;
  * they line up with the screen's fixed layout: the horizon sits just above the Start button.
  */
 final class SkyDrawable extends Drawable {
-    private static final float HORIZON_DP = 372;
+    private static final float HORIZON_DP = 394;
     /** Each cloud: x as a fraction of the width, y in dp, size. They sit clear of the big numbers. */
     private static final float[][] CLOUDS = {
             {0.92f, 118, 0.8f}, {0.07f, 345, 0.7f}, {0.75f, 560, 1.0f}, {0.25f, 680, 0.8f}};

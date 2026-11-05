@@ -60,6 +60,7 @@ import app.runtracker.core.RunRecord;
 import app.runtracker.core.SplitTracker;
 import app.runtracker.core.TrackFilter;
 import app.runtracker.core.TrackPoint;
+import app.runtracker.core.TravelMode;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 1;
@@ -69,6 +70,7 @@ public final class MainActivity extends Activity {
     private static final long REFRESH_MS = 500;
     private static final String STATE_GPX_RUN = "gpxRunId";
     private static final String PREF_ASKED_BATTERY = "askedBattery";
+    private static final String PREF_MODE = "travelMode";
     private static final int COLOR_COLD = 0xFF4FC3F7;
     /** A blend of the cold and hot colours, for text that can't show the blue-red icon. */
     private static final int COLOR_MILD = 0xFFB388FF;
@@ -105,6 +107,10 @@ public final class MainActivity extends Activity {
     private TextView gps;
     private View root;
     private View idlePanel;
+    private View tonePreview;
+    private View modeSelector;
+    private TextView distanceUnit;
+    private TravelMode selectedMode = TravelMode.RUN;
     private Conditions.TimeOfDay shownSky;
     private Button driveStatus;
     private Button action;
@@ -165,6 +171,13 @@ public final class MainActivity extends Activity {
         history = findViewById(R.id.history);
         root = findViewById(R.id.root);
         idlePanel = findViewById(R.id.idle_panel);
+        tonePreview = findViewById(R.id.tone_preview);
+        modeSelector = findViewById(R.id.mode_selector);
+        distanceUnit = findViewById(R.id.distance_unit);
+        findViewById(R.id.mode_run).setOnClickListener(v -> selectMode(TravelMode.RUN));
+        findViewById(R.id.mode_car).setOnClickListener(v -> selectMode(TravelMode.CAR));
+        findViewById(R.id.mode_motorcycle).setOnClickListener(v -> selectMode(TravelMode.MOTORCYCLE));
+        selectMode(TravelMode.fromName(getPreferences(MODE_PRIVATE).getString(PREF_MODE, null)));
         driveStatus = findViewById(R.id.drive_status);
         driveStatus.setOnClickListener(v -> {
             if (!DriveSync.isConnected(this)) {
@@ -273,11 +286,25 @@ public final class MainActivity extends Activity {
         }
         wasRunning = running;
         idlePanel.setVisibility(running ? View.GONE : View.VISIBLE);
+        modeSelector.setVisibility(running ? View.GONE : View.VISIBLE);
+        // Keeps a phone in a holder readable. This only applies while this screen is showing.
+        root.setKeepScreenOn(running && s.mode.isVehicle());
 
         if (running) {
             time.setText(Export.duration(SystemClock.elapsedRealtime() - s.startElapsedMs));
-            distance.setText(Export.km(s.distanceM));
-            showPace(s.gpsOk() ? s.averageSecondsPerKm : Double.NaN);
+            long elapsedMs = SystemClock.elapsedRealtime() - s.startElapsedMs;
+            if (s.mode.isVehicle()) {
+                // Speed fills the big number here; distance moves to the line below it.
+                distance.setText(s.gpsOk() && !Float.isNaN(s.latestSpeedMps)
+                        ? Export.wholeKmh(s.latestSpeedMps * 3.6) : getString(R.string.no_temperature));
+                distanceUnit.setText(R.string.km_per_hour);
+                pace.setText(getString(R.string.vehicle_status, Export.km(s.distanceM),
+                        Export.wholeKmh(Export.averageKmh(s.distanceM, elapsedMs))));
+            } else {
+                distance.setText(Export.km(s.distanceM));
+                distanceUnit.setText(R.string.km);
+                showPace(s.gpsOk() ? s.averageSecondsPerKm : Double.NaN);
+            }
             setIdleGps(false);
             showStatus(s.latestAccuracyM, s.latestFixElapsedMs, s.temperatureC, s.startWallMs);
             // The icon already shows when GPS is fine; words are only for when something needs attention.
@@ -288,7 +315,14 @@ public final class MainActivity extends Activity {
             }
             action.setText(R.string.hold_to_stop);
         } else {
-            showPace(lastRunAverage);
+            distanceUnit.setText(R.string.km);
+            RunRecord last = runs.isEmpty() ? null : runs.get(0);
+            if (last != null && last.mode.isVehicle()) {
+                pace.setText(getString(R.string.avg_speed_short,
+                        Export.wholeKmh(Export.averageKmh(last.distanceM, last.durationMs))));
+            } else {
+                showPace(lastRunAverage);
+            }
             gps.setText("");
             action.setText(R.string.start);
             if (!runs.isEmpty()) {
@@ -464,10 +498,11 @@ public final class MainActivity extends Activity {
                 RunRecord r = getItem(position);
                 TextView text = row.findViewById(R.id.run_text);
                 double average = averagePace(r);
-                text.setText("#" + r.id + " " + date.format(new Date(r.startWallMs)) + " "
-                        + Export.km(r.distanceM) + " " + getString(R.string.km) + " "
-                        + (Double.isNaN(average) ? getString(R.string.no_temperature)
-                                : Export.pace(average) + " /km"));
+                String speed = r.mode.isVehicle()
+                        ? getString(R.string.row_speed, Export.wholeKmh(Export.averageKmh(r.distanceM, r.durationMs)))
+                        : Double.isNaN(average) ? getString(R.string.no_temperature) : Export.pace(average) + " /km";
+                text.setText("#" + r.id + " " + modeIcon(r.mode) + " " + date.format(new Date(r.startWallMs)) + " "
+                        + Export.km(r.distanceM) + " " + getString(R.string.km) + " " + speed);
                 TextView runWeather = row.findViewById(R.id.run_weather);
                 runWeather.setText(weatherText(r.temperatureC, r.startWallMs));
                 return row;
@@ -538,7 +573,7 @@ public final class MainActivity extends Activity {
             startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
             return;
         }
-        RunService.send(this, RunService.ACTION_START);
+        RunService.start(this, selectedMode);
     }
 
     private boolean hasLocationPermission() {
@@ -595,9 +630,16 @@ public final class MainActivity extends Activity {
                 .append('\n').append(icon(startedAt)).append(' ').append(getString(timeOfDayName(startedAt)))
                 .append("\n\n").append(getString(R.string.summary_time, Export.duration(run.durationMs)))
                 .append('\n').append(getString(R.string.summary_distance, Export.km(run.distanceM)))
-                .append('\n').append(getString(R.string.avg_pace, Double.isNaN(average) ? none : Export.pace(average)))
-                .append('\n').append(getString(R.string.summary_speed, Double.isNaN(average) ? none : Export.speedKmh(average)))
-                .append('\n').append(getString(R.string.summary_temperature)).append(' ');
+                .append('\n');
+        if (run.mode.isVehicle()) {
+            text.append(getString(R.string.summary_speed,
+                    Export.wholeKmh(Export.averageKmh(run.distanceM, run.durationMs))));
+        } else {
+            text.append(getString(R.string.avg_pace, Double.isNaN(average) ? none : Export.pace(average)))
+                    .append('\n')
+                    .append(getString(R.string.summary_speed, Double.isNaN(average) ? none : Export.speedKmh(average)));
+        }
+        text.append('\n').append(getString(R.string.summary_temperature)).append(' ');
         if (run.temperatureC == null) {
             text.append(none);
         } else {
@@ -610,6 +652,41 @@ public final class MainActivity extends Activity {
             text.append('\n').append(getString(R.string.summary_estimated, Export.km(run.estimatedM)));
         }
         return text;
+    }
+
+    private void selectMode(TravelMode mode) {
+        selectedMode = mode;
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_MODE, mode.name()).apply();
+        findViewById(R.id.mode_run).setBackgroundResource(modeBackground(TravelMode.RUN));
+        findViewById(R.id.mode_car).setBackgroundResource(modeBackground(TravelMode.CAR));
+        findViewById(R.id.mode_motorcycle).setBackgroundResource(modeBackground(TravelMode.MOTORCYCLE));
+        tonePreview.setVisibility(mode.isVehicle() ? View.GONE : View.VISIBLE);
+    }
+
+    private int modeBackground(TravelMode mode) {
+        return mode == selectedMode ? R.drawable.mode_selected : R.drawable.status_pill;
+    }
+
+    private static String modeIcon(TravelMode mode) {
+        switch (mode) {
+            case CAR:
+                return "🚗";
+            case MOTORCYCLE:
+                return "🏍️";
+            default:
+                return "🏃";
+        }
+    }
+
+    private static int modeName(TravelMode mode) {
+        switch (mode) {
+            case CAR:
+                return R.string.mode_car;
+            case MOTORCYCLE:
+                return R.string.mode_motorcycle;
+            default:
+                return R.string.mode_run;
+        }
     }
 
     private static int timeOfDayName(Conditions.TimeOfDay timeOfDay) {
@@ -627,11 +704,11 @@ public final class MainActivity extends Activity {
 
     private void showSummary(RunRecord run) {
         new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.summary_title, run.id))
+                .setTitle(modeIcon(run.mode) + " " + getString(R.string.summary_title, getString(modeName(run.mode)), run.id))
                 .setMessage(summaryText(run))
                 .setPositiveButton(R.string.export_gpx, (dialog, which) -> {
                     gpxRunId = run.id;
-                    String name = new SimpleDateFormat("'run-'yyyy-MM-dd-HHmm'.gpx'", Locale.US)
+                    String name = run.mode.label + new SimpleDateFormat("'-'yyyy-MM-dd-HHmm'.gpx'", Locale.US)
                             .format(new Date(run.startWallMs));
                     createDocument("application/gpx+xml", name, REQUEST_EXPORT_GPX);
                 })

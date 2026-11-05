@@ -33,12 +33,14 @@ import app.runtracker.core.RunRecord;
 import app.runtracker.core.SplitTracker;
 import app.runtracker.core.TrackFilter;
 import app.runtracker.core.TrackPoint;
+import app.runtracker.core.TravelMode;
 
 /** Tracks the run in the foreground so it continues with the screen locked. */
 public final class RunService extends Service {
     static final String ACTION_START = "app.runtracker.START";
     static final String ACTION_STOP = "app.runtracker.STOP";
     static final String ACTION_RESUME = "app.runtracker.RESUME";
+    private static final String EXTRA_MODE = "mode";
 
     /** What the screen shows. Null means no run is being tracked. */
     static final class Snapshot {
@@ -54,10 +56,15 @@ public final class RunService extends Service {
         /** From the newest reading of any quality; latestFixElapsedMs is 0 before the first one. */
         final float latestAccuracyM;
         final long latestFixElapsedMs;
+        final TravelMode mode;
+        /** NaN when the newest reading had no speed. */
+        final float latestSpeedMps;
 
         Snapshot(long startElapsedMs, double distanceM, boolean hadFix, long lastGoodElapsedMs,
                  double averageSecondsPerKm, long startWallMs, Double temperatureC,
-                 float latestAccuracyM, long latestFixElapsedMs) {
+                 float latestAccuracyM, long latestFixElapsedMs, TravelMode mode, float latestSpeedMps) {
+            this.mode = mode;
+            this.latestSpeedMps = latestSpeedMps;
             this.latestAccuracyM = latestAccuracyM;
             this.latestFixElapsedMs = latestFixElapsedMs;
             this.startWallMs = startWallMs;
@@ -130,6 +137,8 @@ public final class RunService extends Service {
     private long lastWeatherAttemptMs;
     private float latestAccuracyM;
     private long latestFixElapsedMs;
+    private float latestSpeedMps = Float.NaN;
+    private TravelMode mode = TravelMode.RUN;
 
     @Override
     public void onCreate() {
@@ -173,6 +182,7 @@ public final class RunService extends Service {
         if (active != null) {
             resumeRun(active);
         } else if (ACTION_START.equals(action)) {
+            mode = TravelMode.fromName(intent.getStringExtra(EXTRA_MODE));
             startNewRun();
         } else {
             stopTracking();
@@ -191,8 +201,8 @@ public final class RunService extends Service {
     private void startNewRun() {
         startElapsedMs = SystemClock.elapsedRealtime();
         startWallMs = System.currentTimeMillis();
-        runId = db.createRun(startWallMs, startElapsedMs, bootCount());
-        filter = new TrackFilter();
+        runId = db.createRun(startWallMs, startElapsedMs, bootCount(), mode);
+        filter = new TrackFilter(mode);
         splits = new SplitTracker();
         beginTracking();
     }
@@ -213,7 +223,8 @@ public final class RunService extends Service {
         startElapsedMs = run.startElapsedMs;
         startWallMs = run.startWallMs;
         temperatureC = run.temperatureC;
-        filter = last == null ? new TrackFilter() : new TrackFilter(last, run.estimatedM);
+        mode = run.mode;
+        filter = last == null ? new TrackFilter(mode) : new TrackFilter(mode, last, run.estimatedM);
         splits = new SplitTracker();
         for (TrackPoint p : points) {
             splits.onPoint(p);
@@ -243,6 +254,7 @@ public final class RunService extends Service {
         float accuracy = location.hasAccuracy() ? location.getAccuracy() : Float.MAX_VALUE;
         latestAccuracyM = accuracy;
         latestFixElapsedMs = fixElapsedMs;
+        latestSpeedMps = location.hasSpeed() ? location.getSpeed() : Float.NaN;
         Fix fix = new Fix(tMs, location.getLatitude(), location.getLongitude(), accuracy);
 
         fetchTemperatureIfNeeded(fix.lat, fix.lon);
@@ -255,7 +267,9 @@ public final class RunService extends Service {
             for (TrackPoint p : result.points) {
                 db.addPoint(runId, p);
                 for (SplitTracker.Cue cue : splits.onPoint(p)) {
-                    tones.play(cue);
+                    if (!mode.isVehicle()) {
+                        tones.play(cue);
+                    }
                 }
             }
             db.updateProgress(runId, filter.totalM(), filter.estimatedM());
@@ -314,7 +328,7 @@ public final class RunService extends Service {
     private void publish() {
         current = new Snapshot(startElapsedMs, filter.totalM(), hadFix, lastGoodElapsedMs,
                 splits.averageSecondsPerKm(), startWallMs, temperatureC,
-                latestAccuracyM, latestFixElapsedMs);
+                latestAccuracyM, latestFixElapsedMs, mode, latestSpeedMps);
     }
 
     private void finishCurrentRun() {
@@ -392,8 +406,19 @@ public final class RunService extends Service {
             return getString(R.string.gps_lost);
         }
         String gps = getString(R.string.gps_ok);
+        if (snapshot.mode.isVehicle()) {
+            long elapsedMs = SystemClock.elapsedRealtime() - snapshot.startElapsedMs;
+            return getString(R.string.avg_speed_short,
+                    Export.wholeKmh(Export.averageKmh(snapshot.distanceM, elapsedMs))) + "  ·  " + gps;
+        }
         return Double.isNaN(snapshot.averageSecondsPerKm) ? gps
                 : getString(R.string.avg_pace, Export.pace(snapshot.averageSecondsPerKm)) + "  ·  " + gps;
+    }
+
+    static void start(Context context, TravelMode mode) {
+        context.startForegroundService(new Intent(context, RunService.class)
+                .setAction(ACTION_START)
+                .putExtra(EXTRA_MODE, mode.name()));
     }
 
     static void send(Context context, String action) {

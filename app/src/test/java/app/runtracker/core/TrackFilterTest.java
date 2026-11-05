@@ -23,6 +23,56 @@ public class TrackFilterTest {
         return f;
     }
 
+    private static double driveAt30MetresPerSecond(TravelMode mode) {
+        TrackFilter f = new TrackFilter(mode);
+        for (long t = 0; t <= 100; t++) {
+            f.onFix(at(t, t * 30.0));
+        }
+        return f.totalM();
+    }
+
+    @Test
+    public void vehicleSpeedsCountInVehicleModes() {
+        assertEquals(3000, driveAt30MetresPerSecond(TravelMode.CAR), 25);
+        assertEquals(3000, driveAt30MetresPerSecond(TravelMode.MOTORCYCLE), 25);
+    }
+
+    @Test
+    public void vehicleSpeedIsNotCountedInRunMode() {
+        assertEquals(0, driveAt30MetresPerSecond(TravelMode.RUN), 0.001);
+    }
+
+    @Test
+    public void vehicleModesIgnoreDriftThatRunModeWouldCount() {
+        TrackFilter car = new TrackFilter(TravelMode.CAR);
+        TrackFilter run = new TrackFilter(TravelMode.RUN);
+        for (int t = 0; t < 60; t++) {
+            Fix fix = at(t, t % 2 == 0 ? 0 : 7);
+            car.onFix(fix);
+            run.onFix(fix);
+        }
+        assertEquals(0, car.totalM(), 0.001);
+        assertTrue(run.totalM() > 100);
+    }
+
+    @Test
+    public void impossibleJumpIsStillIgnoredInVehicleModes() {
+        TrackFilter f = new TrackFilter(TravelMode.CAR);
+        for (long t = 0; t <= 10; t++) {
+            f.onFix(at(t, t * 30.0));
+        }
+        double before = f.totalM();
+        assertEquals(TrackFilter.Status.PENDING, f.onFix(at(11, 5000)).status);
+        assertEquals(before, f.totalM(), 0.001);
+    }
+
+    @Test
+    public void unknownModeNameFallsBackToRun() {
+        assertEquals(TravelMode.CAR, TravelMode.fromName("CAR"));
+        assertEquals(TravelMode.RUN, TravelMode.fromName(null));
+        assertEquals(TravelMode.RUN, TravelMode.fromName("BOAT"));
+    }
+
     @Test
     public void steadyRunCountsAllDistance() {
         assertEquals(300, runTo(100).totalM(), 3.5);
@@ -130,7 +180,7 @@ public class TrackFilterTest {
     @Test
     public void restoredFilterContinuesFromLastPoint() {
         TrackPoint last = new TrackPoint(at(100, 300), 300, 2, false);
-        TrackFilter f = new TrackFilter(last, 50);
+        TrackFilter f = new TrackFilter(TravelMode.RUN, last, 50);
         TrackFilter.Result r = f.onFix(at(103, 309));
         assertEquals(TrackFilter.Status.ACCEPTED, r.status);
         assertEquals(2, r.points.get(0).segment);

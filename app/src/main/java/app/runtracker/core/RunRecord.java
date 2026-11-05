@@ -11,9 +11,12 @@ public final class RunRecord {
     public final double estimatedM;
     /** Air temperature at the start of the run, or null if it couldn't be fetched. */
     public final Double temperatureC;
+    public final TravelMode mode;
 
     public RunRecord(long id, long startWallMs, long startElapsedMs, int bootCount,
-                     long durationMs, double distanceM, double estimatedM, Double temperatureC) {
+                     long durationMs, double distanceM, double estimatedM, Double temperatureC,
+                     TravelMode mode) {
+        this.mode = mode;
         this.id = id;
         this.startWallMs = startWallMs;
         this.startElapsedMs = startElapsedMs;

@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Turns raw GPS fixes into trustworthy distance.
+ * Turns raw GNSS fixes into trustworthy distance, using the speed and drift limits of the travel mode.
  *
  * Normal fixes add distance straight away. A fix that arrives after a gap, or at an impossible
  * speed, is held until later fixes agree with it. Then it is either bridged (a realistic speed from
@@ -14,10 +14,7 @@ import java.util.List;
  */
 public final class TrackFilter {
     public static final float MAX_ACCURACY_M = 25f;
-    /** 8 m/s is 2:05 per km. */
-    public static final double MAX_SPEED_MPS = 8.0;
     public static final long GAP_MS = 10_000;
-    public static final double MIN_MOVE_M = 5.0;
     static final int BRIDGE_CONFIRMATIONS = 3;
     static final int RELOCATE_CONFIRMATIONS = 5;
 
@@ -37,6 +34,7 @@ public final class TrackFilter {
     private static final Result PENDING = new Result(Status.PENDING, Collections.emptyList());
     private static final Result STILL = new Result(Status.STILL, Collections.emptyList());
 
+    private final TravelMode mode;
     private final List<Fix> pending = new ArrayList<>();
     /** Position the distance total was last measured from. */
     private Fix anchor;
@@ -47,10 +45,16 @@ public final class TrackFilter {
     private int segment;
 
     public TrackFilter() {
+        this(TravelMode.RUN);
     }
 
-    /** Continues a run after the app process was killed. */
-    public TrackFilter(TrackPoint last, double estimatedM) {
+    public TrackFilter(TravelMode mode) {
+        this.mode = mode;
+    }
+
+    /** Continues a trip after the app process was killed. */
+    public TrackFilter(TravelMode mode, TrackPoint last, double estimatedM) {
+        this.mode = mode;
         anchor = last.fix;
         lastSeen = last.fix;
         totalM = last.cumM;
@@ -80,7 +84,7 @@ public final class TrackFilter {
         if (f.tMs <= lastSeen.tMs) {
             return REJECTED;
         }
-        if (f.tMs - lastSeen.tMs < GAP_MS && speed(lastSeen, f) <= MAX_SPEED_MPS) {
+        if (f.tMs - lastSeen.tMs < GAP_MS && speed(lastSeen, f) <= mode.maxSpeedMps) {
             pending.clear();
             List<TrackPoint> points = new ArrayList<>(1);
             countNormal(f, points);
@@ -95,7 +99,7 @@ public final class TrackFilter {
         }
         pending.add(f);
         Fix first = pending.get(0);
-        boolean plausible = speed(lastSeen, first) <= MAX_SPEED_MPS;
+        boolean plausible = speed(lastSeen, first) <= mode.maxSpeedMps;
         if (pending.size() < (plausible ? BRIDGE_CONFIRMATIONS : RELOCATE_CONFIRMATIONS)) {
             return PENDING;
         }
@@ -120,7 +124,7 @@ public final class TrackFilter {
     private void countNormal(Fix f, List<TrackPoint> out) {
         lastSeen = f;
         double moved = anchor.distanceTo(f);
-        if (moved < Math.max(MIN_MOVE_M, f.accuracyM)) {
+        if (moved < Math.max(mode.minMoveM, f.accuracyM)) {
             return;
         }
         totalM += moved;
@@ -128,9 +132,9 @@ public final class TrackFilter {
         out.add(new TrackPoint(f, totalM, segment, false));
     }
 
-    private static boolean agrees(Fix a, Fix b) {
+    private boolean agrees(Fix a, Fix b) {
         long dt = b.tMs - a.tMs;
-        return dt > 0 && dt < GAP_MS && speed(a, b) <= MAX_SPEED_MPS;
+        return dt > 0 && dt < GAP_MS && speed(a, b) <= mode.maxSpeedMps;
     }
 
     private static double speed(Fix a, Fix b) {
